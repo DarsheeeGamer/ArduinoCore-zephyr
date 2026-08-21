@@ -34,10 +34,9 @@ jobs:
           path: |
             /home/runner/.local/share/zephyr-sdk-0.16.8
             /home/runner/zephyr-sdk-1.0.1
-            /home/runner/zephyr_env
             /home/runner/work/ArduinoCore-zephyr/zephyr
             /home/runner/work/ArduinoCore-zephyr/modules
-          key: zephyr-unoq-workspace-cache-v1
+          key: zephyr-unoq-workspace-cache-v2
 
       - name: Install System Dependencies
         run: |
@@ -45,19 +44,17 @@ jobs:
           sudo apt install -y build-essential git cmake ninja-build \
                               zstd jq rsync wget libglib2.0-0
 
-      - name: Setup Virtualenv
+      - name: Create Repo Venv & Dependencies
         run: |
-          if [ ! -d "$HOME/zephyr_env" ]; then
-            python3 -m venv ~/zephyr_env
-          fi
-          source ~/zephyr_env/bin/activate
+          python3 -m venv venv
+          source venv/bin/activate
           pip install --upgrade pip
           pip install west requests
 
       - name: Bootstrap Environment
         shell: bash
         run: |
-          source ~/zephyr_env/bin/activate
+          source venv/bin/activate
           chmod +x ./extra/bootstrap.sh
           if [ ! -d "/home/runner/work/ArduinoCore-zephyr/zephyr" ]; then
             yes y | ./extra/bootstrap.sh || true
@@ -70,15 +67,14 @@ jobs:
           path: |
             /home/runner/.local/share/zephyr-sdk-0.16.8
             /home/runner/zephyr-sdk-1.0.1
-            /home/runner/zephyr_env
             /home/runner/work/ArduinoCore-zephyr/zephyr
             /home/runner/work/ArduinoCore-zephyr/modules
-          key: zephyr-unoq-workspace-cache-v1
+          key: zephyr-unoq-workspace-cache-v2
 
       - name: Compile UNO Q Loader
         shell: bash
         run: |
-          source ~/zephyr_env/bin/activate
+          source venv/bin/activate
           
           if [ -d "$HOME/zephyr-sdk-1.0.1" ]; then
             export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-1.0.1"
