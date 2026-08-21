@@ -10,17 +10,18 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout repository with full history & tags
+      - name: Checkout repository with tags
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Cache Zephyr SDK & Workspace
+      - name: Cache Full Zephyr SDK & Workspace
         id: cache-zephyr
         uses: actions/cache@v4
         with:
@@ -28,7 +29,11 @@ jobs:
             ~/.local/share/zephyr-sdk-0.16.8
             ~/zephyr-sdk-0.16.8
             ~/zephyr_env
-          key: zephyr-sdk-0.16.8-py312-v2
+            ../zephyr
+            ../modules
+            ../bootloader
+            ../tools
+          key: zephyr-full-workspace-v3
 
       - name: Install System Dependencies
         run: |
@@ -45,20 +50,34 @@ jobs:
           pip install --upgrade pip
           pip install west requests
 
-      - name: Bootstrap Zephyr
+      - name: Fix Git Tags & Bootstrap
         shell: bash
         run: |
           source ~/zephyr_env/bin/activate
+          
+          # Fix empty git describe in forks by ensuring at least a base tag exists
+          if [ -z "$(git describe --tags --always 2>/dev/null)" ] || [ -z "$(git tag)" ]; then
+            echo "Creating dummy release tag for build script version parsing..."
+            git tag -a 0.90.0 -m "Release 0.90.0" || true
+          fi
+          
           chmod +x ./extra/bootstrap.sh
           
-          # Pass 'y' non-interactively to all license prompts
-          yes y | ./extra/bootstrap.sh || true
+          # Run bootstrap only if not already initialized
+          if [ ! -d "../zephyr" ]; then
+            yes y | ./extra/bootstrap.sh || true
+          fi
 
       - name: Build Arduino UNO Q Custom Loader
         shell: bash
         run: |
           source ~/zephyr_env/bin/activate
           
+          # Ensure git tag is present for version check
+          if [ -z "$(git describe --tags 2>/dev/null)" ]; then
+            git tag -a 0.90.0 -m "Release 0.90.0" || true
+          fi
+
           # Locate Zephyr SDK
           if [ -d "$HOME/zephyr-sdk-0.16.8" ]; then
             export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-0.16.8"
