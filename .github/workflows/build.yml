@@ -27,9 +27,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache Full Zephyr SDK & Workspace
-        id: cache-zephyr
-        uses: actions/cache@v4
+      # Step 1: Attempt to restore from cache
+      - name: Restore Zephyr SDK & Workspace Cache
+        id: restore-zephyr-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.local/share/zephyr-sdk-0.16.8
@@ -39,7 +40,7 @@ jobs:
             ../modules
             ../bootloader
             ../tools
-          key: zephyr-full-workspace-v4
+          key: zephyr-full-workspace-v5
 
       - name: Install System Dependencies
         run: |
@@ -62,10 +63,25 @@ jobs:
           source ~/zephyr_env/bin/activate
           chmod +x ./extra/bootstrap.sh
           
-          # Only run bootstrap if zephyr is not already restored from cache
+          # Only bootstrap if zephyr source is missing
           if [ ! -d "../zephyr" ]; then
             yes y | ./extra/bootstrap.sh || true
           fi
+
+      # Step 2: GUARANTEED SAVE (runs even if later steps fail or get canceled)
+      - name: Always Save Zephyr Cache
+        uses: actions/cache/save@v4
+        if: always() && steps.restore-zephyr-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.local/share/zephyr-sdk-0.16.8
+            ~/zephyr-sdk-0.16.8
+            ~/zephyr_env
+            ../zephyr
+            ../modules
+            ../bootloader
+            ../tools
+          key: zephyr-full-workspace-v5
 
       - name: Build Arduino UNO Q Custom Loader
         shell: bash
