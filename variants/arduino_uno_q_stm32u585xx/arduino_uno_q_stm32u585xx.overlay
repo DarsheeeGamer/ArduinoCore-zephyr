@@ -5,6 +5,7 @@
  */
 #include <zephyr/dt-bindings/pwm/stm32_pwm.h>
 #include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
 
 /* Pinmux configuration for STM32U585 SAI2 Block A */
 /*
@@ -51,6 +52,65 @@
 				status = "okay";
 				pinctrl-0 = <&sai2a_default>;
 				pinctrl-names = "default";
+				/*
+				 * BUG FIX (2026-08-21): dmas/dma-names are both
+				 * `required: true` per dts/bindings/i2s/st,stm32-sai.yaml's
+				 * child-binding (upstream zephyrproject-rtos/zephyr) --
+				 * confirmed via the SAME CI compile that caught the
+				 * group1 nesting bug above, once that first error was
+				 * fixed and this one surfaced next.
+				 *
+				 * Request line 38 (SAI2_A) confirmed directly from ST's
+				 * own official HAL driver source, not derived or
+				 * guessed: LL_GPDMA1_REQUEST_SAI2_A = 38U, in
+				 * STMicroelectronics/stm32u5xx-hal-driver's
+				 * Inc/stm32u5xx_ll_dma.h (gated behind #if
+				 * defined(SAI2), confirming this chip variant has it).
+				 * No board in the public Zephyr tree wires this exact
+				 * peripheral (st,stm32-sai-sub-block) to DMA yet, so
+				 * there was no existing devicetree example to copy --
+				 * this is derived from the vendor's own C header, the
+				 * same source Zephyr's own binding documentation
+				 * points to ("Refer to your product's Reference
+				 * Manual for the list and mapping of available DMA
+				 * requests", per dts/bindings/dma/st,stm32u5-dma.yaml's
+				 * worked example).
+				 *
+				 * &gpdma1 confirmed as the correct node label from
+				 * this board's own base file
+				 * (boards/arduino/uno_q/arduino_uno_q.dts:68,
+				 * upstream zephyrproject-rtos/zephyr -- already
+				 * enabled there with status = "okay").
+				 *
+				 * TX only (single channel, single dmas/dma-names
+				 * entry): this SAI2_A instance drives the MAX98357A
+				 * speaker over I2S -- playback-only, no microphone/
+				 * capture path exists on this board, so an RX channel
+				 * would configure hardware that is never used.
+				 * Channel 0 chosen arbitrarily (this overlay's only
+				 * GPDMA1 consumer so far -- no other node currently
+				 * claims a channel number to conflict with; channel
+				 * numbers on this GPDMA1 instance are not tied to a
+				 * specific peripheral, per the binding's own
+				 * dma-channels/dma-requests split in
+				 * arduino_uno_q_stm32u585xx.dtsi).
+				 *
+				 * Flag names (STM32_DMA_PERIPH_TX, STM32_DMA_PRIORITY_
+				 * MEDIUM) confirmed present in this exact Zephyr
+				 * version's own canonical header
+				 * (include/zephyr/dt-bindings/dma/stm32_dma.h,
+				 * upstream zephyrproject-rtos/zephyr) -- not assumed
+				 * to exist from an older-generation board's usage.
+				 *
+				 * UNVERIFIED BEYOND THIS POINT: the request-number
+				 * source (ST's own HAL header) is authoritative for
+				 * WHAT the number is, but nothing has yet confirmed
+				 * this dmas line actually compiles+links+runs
+				 * correctly end-to-end on real hardware -- that is
+				 * the next real test, not this comment.
+				 */
+				dmas = <&gpdma1 0 38 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_MEDIUM)>;
+				dma-names = "tx";
 			};
 		};
 	};
