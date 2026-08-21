@@ -522,3 +522,9 @@ EXPORT_SYMBOL(magic_location);
 FORCE_EXPORT_SYM(regulator_enable);
 FORCE_EXPORT_SYM(regulator_disable);
 #endif
+#include <zephyr/drivers/i2s.h>
+
+EXPORT_SYMBOL(i2s_configure);
+EXPORT_SYMBOL(i2s_write);
+EXPORT_SYMBOL(i2s_read);
+EXPORT_SYMBOL(i2s_trigger);
