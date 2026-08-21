@@ -17,15 +17,37 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y python3-pip python3-setuptools python3-venv build-essential \
-                              git cmake ninja-build zstd jq rsync
+                              git cmake ninja-build zstd jq rsync wget libglib2.0-0
 
-      - name: Bootstrap Zephyr & SDK Toolchains
+      - name: Setup Zephyr SDK and West Environment
         run: |
+          # 1. Create and activate virtual environment
+          python3 -m venv ~/zephyr_env
+          source ~/zephyr_env/bin/activate
+          pip install --upgrade pip
+          pip install west
+
+          # 2. Run the repository bootstrap script within the active venv
           chmod +x ./extra/bootstrap.sh
           ./extra/bootstrap.sh
 
+          # 3. Export environment variables to GitHub Action environment
+          echo "$HOME/zephyr_env/bin" >> $GITHUB_PATH
+
       - name: Build Arduino UNO Q Custom Loader
+        shell: bash
         run: |
+          source ~/zephyr_env/bin/activate
+          
+          # Find and register any installed Zephyr SDK
+          if [ -d "$HOME/zephyr-sdk-0.16.8" ]; then
+            export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-0.16.8"
+          elif [ -d "$HOME/.local/share/zephyr-sdk-0.16.8" ]; then
+            export ZEPHYR_SDK_INSTALL_DIR="$HOME/.local/share/zephyr-sdk-0.16.8"
+          fi
+          
+          export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
+          
           chmod +x ./extra/build.sh
           ./extra/build.sh arduino_uno_q
 
@@ -38,3 +60,4 @@ jobs:
             firmware/zephyr-arduino_uno_q_stm32u585xx.bin
             variants/arduino_uno_q_stm32u585xx/syms-dynamic.ld
             variants/arduino_uno_q_stm32u585xx/syms-static.ld
+          if-no-files-found: warn
