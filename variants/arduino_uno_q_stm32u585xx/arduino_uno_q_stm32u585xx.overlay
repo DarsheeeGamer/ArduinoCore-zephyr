@@ -7,14 +7,29 @@
 #include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
 
 /* Pinmux configuration for STM32U585 SAI2 Block A */
+/*
+ * BUG FIX (2026-08-21): the 'group1' sub-node below is Linux-devicetree
+ * pinctrl convention (grouping multiple pin configs under named sub-groups
+ * for things like open-drain-per-group vs push-pull-per-group). Confirmed
+ * via a real CI compile failure that Zephyr's STM32 pinctrl binding
+ * (dts/bindings/pinctrl/st,stm32-pinctrl.yaml, upstream
+ * zephyrproject-rtos/zephyr) does NOT use that convention -- its
+ * child-binding requires `pinmux` directly on the state node itself
+ * (one level below &pinctrl), not nested inside an intermediate group.
+ * Confirmed against every one of the 4260 real pin definitions in
+ * hal_stm32's stm32u585aiix-pinctrl.dtsi (zephyrproject-rtos/hal_stm32):
+ * zero use `group1`-style nesting anywhere; every single one sets pinmux
+ * directly on its named leaf node (e.g. `sai2_sd_a_pb15 { pinmux = ...; };`).
+ * The pin ASSIGNMENTS below were never wrong -- confirmed against that
+ * same vendor file (sai2_sck_a_pb13, sai2_sd_a_pb15, sai2_fs_a_pc0, all
+ * AF13) -- only this node's nesting depth was.
+ */
 &pinctrl {
 	sai2a_default: sai2a_default {
-		group1 {
-			pinmux = <STM32_PINMUX('B', 13, AF13)>,  /* D13 -> SAI2_SCK_A (BCLK) */
-			         <STM32_PINMUX('B', 15, AF13)>,  /* D11 -> SAI2_SD_A  (DIN)  */
-			         <STM32_PINMUX('C',  0, AF13)>;  /* A5  -> SAI2_FS_A  (LRC)  */
-			bias-disable;
-		};
+		pinmux = <STM32_PINMUX('B', 13, AF13)>,  /* D13 -> SAI2_SCK_A (BCLK) */
+		         <STM32_PINMUX('B', 15, AF13)>,  /* D11 -> SAI2_SD_A  (DIN)  */
+		         <STM32_PINMUX('C',  0, AF13)>;  /* A5  -> SAI2_FS_A  (LRC)  */
+		bias-disable;
 	};
 };
 
