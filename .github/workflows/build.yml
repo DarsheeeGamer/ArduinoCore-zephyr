@@ -36,7 +36,18 @@ jobs:
             /home/runner/zephyr-sdk-1.0.1
             /home/runner/work/ArduinoCore-zephyr/zephyr
             /home/runner/work/ArduinoCore-zephyr/modules
-          key: zephyr-unoq-workspace-cache-v2
+            /home/runner/work/ArduinoCore-zephyr/.west
+          # BUG FIX (2026-08-21): bumped v2 -> v3. Every cache ever saved
+          # under the v2 key was written BEFORE .west/ was added to the
+          # save path list above -- so even with today's fix, the very
+          # next run would still hit v2, restore a .west-less workspace
+          # (identical to the failure this fixes), and "Save Workspace
+          # Cache" wouldn't re-save over it (it's gated on cache-hit !=
+          # 'true', and a v2 hit is still a hit). Bumping the key forces a
+          # real cache miss once, so this run does a full bootstrap
+          # (creating .west/ for real) and saves a v3 cache that actually
+          # contains it -- every run after this one gets a correct restore.
+          key: zephyr-unoq-workspace-cache-v3
 
       - name: Install System Dependencies
         run: |
@@ -56,7 +67,26 @@ jobs:
         run: |
           source venv/bin/activate
           chmod +x ./extra/bootstrap.sh
-          if [ ! -d "/home/runner/work/ArduinoCore-zephyr/zephyr" ]; then
+          # BUG FIX (2026-08-21): this used to check only for the `zephyr/`
+          # directory's presence -- but the cache (see "Restore Build
+          # Workspace Cache" above) restores `zephyr/` and `modules/`
+          # without also restoring `.west/`, which is the actual marker
+          # `west topdir` (and therefore ./extra/build.sh, which depends on
+          # it) needs to recognize this as a real workspace at all.
+          # Confirmed live via a real CI run (job 96888659859, run
+          # 32519579002): "Restore Build Workspace Cache" reported a clean
+          # cache hit and successful restore, "Bootstrap Environment" then
+          # saw `zephyr/` already present and skipped bootstrap.sh entirely
+          # (including its `west init -l .` call, the only thing that
+          # creates `.west/`) -- and "Compile UNO Q Loader" immediately
+          # failed with "FATAL ERROR: no west workspace found ... west
+          # topdir requires one". A directory tree that looks complete
+          # enough to skip re-bootstrapping was actually missing the one
+          # file that makes it a workspace -- checking for `.west` instead
+          # of `zephyr` is checking for the thing that's actually load-
+          # bearing for this decision, not a proxy for it that can drift
+          # out of sync with what the cache actually restores.
+          if [ ! -d "/home/runner/work/ArduinoCore-zephyr/.west" ]; then
             yes y | ./extra/bootstrap.sh || true
           fi
 
@@ -69,7 +99,17 @@ jobs:
             /home/runner/zephyr-sdk-1.0.1
             /home/runner/work/ArduinoCore-zephyr/zephyr
             /home/runner/work/ArduinoCore-zephyr/modules
-          key: zephyr-unoq-workspace-cache-v2
+            /home/runner/work/ArduinoCore-zephyr/.west
+          # BUG FIX (2026-08-21): must match the restore key above
+          # (zephyr-unoq-workspace-cache-v3), not the old v2. Caught this
+          # mismatch before pushing -- restore-cache would correctly miss
+          # on v3 (forcing today's real bootstrap), but saving back under
+          # v2 would mean every SUBSEQUENT run also misses v3 and re-does
+          # the full bootstrap from scratch every time, silently defeating
+          # the cache's entire purpose (each run would still produce a
+          # correct .west/, just slowly, at full bootstrap cost every run
+          # instead of once).
+          key: zephyr-unoq-workspace-cache-v3
 
       - name: Compile UNO Q Loader
         shell: bash
