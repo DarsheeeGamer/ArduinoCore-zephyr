@@ -10,8 +10,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with full history & tags
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
@@ -26,7 +28,7 @@ jobs:
             ~/.local/share/zephyr-sdk-0.16.8
             ~/zephyr-sdk-0.16.8
             ~/zephyr_env
-          key: zephyr-sdk-0.16.8-py312-v1
+          key: zephyr-sdk-0.16.8-py312-v2
 
       - name: Install System Dependencies
         run: |
@@ -34,36 +36,30 @@ jobs:
           sudo apt install -y build-essential git cmake ninja-build \
                               zstd jq rsync wget libglib2.0-0
 
-      - name: Setup Virtualenv & Tools
+      - name: Setup Virtualenv & Dependencies
         run: |
           if [ ! -d "$HOME/zephyr_env" ]; then
             python3 -m venv ~/zephyr_env
           fi
           source ~/zephyr_env/bin/activate
           pip install --upgrade pip
-          pip install west
+          pip install west requests
 
-      - name: Bootstrap Zephyr & Auto-Accept Blob Licenses
+      - name: Bootstrap Zephyr
         shell: bash
         run: |
           source ~/zephyr_env/bin/activate
           chmod +x ./extra/bootstrap.sh
           
-          # Patch bootstrap or pre-accept licenses so non-interactive CI won't crash
-          export WEST_BLOBS_ACCEPT_LICENSES=1
-          
-          # Pipe 'y' repeatedly to handle any interactive license prompts
+          # Pass 'y' non-interactively to all license prompts
           yes y | ./extra/bootstrap.sh || true
-          
-          # Explicitly fetch blobs non-interactively if needed
-          west blobs fetch --accept-licenses || true
 
       - name: Build Arduino UNO Q Custom Loader
         shell: bash
         run: |
           source ~/zephyr_env/bin/activate
           
-          # Locate Zephyr SDK from cache or fresh install
+          # Locate Zephyr SDK
           if [ -d "$HOME/zephyr-sdk-0.16.8" ]; then
             export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-0.16.8"
           elif [ -d "$HOME/.local/share/zephyr-sdk-0.16.8" ]; then
