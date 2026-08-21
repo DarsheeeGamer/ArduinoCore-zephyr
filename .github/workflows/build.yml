@@ -1,71 +1,40 @@
-name: Build native Zephyr samples
+name: Build UNO Q Zephyr Loader
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build native Zephyr samples
-    runs-on: ubuntu-latest
-    container: zephyrprojectrtos/ci-base:latest
-    env:
-      CMAKE_PREFIX_PATH: /opt/toolchains
-      CCACHE_IGNOREOPTIONS: -specs=*
-      MODULE_PATH: ../modules/lib/ArduinoCore-zephyr
-
-      # action-setup-zephyr will initialize the repo in $GITHUB_WORKSPACE/..,
-      # so we need to put the module in $GITHUB_WORKSPACE's parent, but
-      # actions/checkout would not be able to checkout the module there
-      # directly, so we use "subfolder" and move it later.
-      #
-      # using action-setup-zephyr also requires a local west.yml and so the
-      # folder must be manually added to Zephyr as a module via
-      # EXTRA_ZEPHYR_MODULES.
+    runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-pip python3-setuptools python3-venv build-essential \
+                              git cmake ninja-build zstd jq rsync
+
+      - name: Bootstrap Zephyr & SDK Toolchains
+        run: |
+          chmod +x ./extra/bootstrap.sh
+          ./extra/bootstrap.sh
+
+      - name: Build Arduino UNO Q Custom Loader
+        run: |
+          chmod +x ./extra/build.sh
+          ./extra/build.sh arduino_uno_q
+
+      - name: Upload Firmware and Variant Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          fetch-depth: 0
-          persist-credentials: false
-          path: subfolder
-
-      - name: Fix module path, list needed HALs
-        run: |
-          mkdir -p $(dirname $MODULE_PATH) && mv subfolder $MODULE_PATH
-          NEEDED_HALS=$(grep 'build.zephyr_hals=' $MODULE_PATH/boards.txt | cut -d '=' -f 2 | xargs -n 1 echo | sort -u)
-          HAL_FILTER="-hal_.*"
-          for hal in $NEEDED_HALS; do
-            HAL_FILTER="$HAL_FILTER,+$hal"
-          done
-          echo "HAL_FILTER=$HAL_FILTER" | tee -a $GITHUB_ENV
-
-      - name: Setup Zephyr project
-        uses: zephyrproject-rtos/action-zephyr-setup@v1
-        with:
-          toolchains: arm-zephyr-eabi
-          manifest-file-name: ${{ env.MODULE_PATH }}/west.yml
-          west-project-filter: ${{ env.HAL_FILTER }}
-          enable-ccache: false
-
-      - name: Add manifest path as module
-        run: |
-          echo EXTRA_ZEPHYR_MODULES="$(pwd)/$MODULE_PATH" >> $GITHUB_ENV
-
-      - name: Fetch the Arduino API
-        run: |
-          west blobs --auto-accept fetch arduino-api
-
-      - name: Build fade
-        run: |
-          west build -p -b arduino_nano_33_ble//sense $MODULE_PATH/samples/fade
-
-      - name: Build i2cdemo
-        run: |
-          west build -p -b ek_ra8d1 $MODULE_PATH/samples/i2cdemo
-
-      - name: Build adc
-        run: |
-          west build -p -b arduino_nano_33_ble/nrf52840/sense $MODULE_PATH/samples/analog_input
+          name: unoq-i2s-firmware
+          path: |
+            firmware/zephyr-arduino_uno_q_stm32u585xx.elf
+            firmware/zephyr-arduino_uno_q_stm32u585xx.bin
+            variants/arduino_uno_q_stm32u585xx/syms-dynamic.ld
+            variants/arduino_uno_q_stm32u585xx/syms-static.ld
