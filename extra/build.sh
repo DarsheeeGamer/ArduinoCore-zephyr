@@ -7,7 +7,26 @@ set -e
 
 source venv/bin/activate
 
-ZEPHYR_BASE=$(west topdir)/zephyr
+# BUG FIX (2026-08-21): this was a bare (non-exported) assignment. It works
+# fine for anything referencing $ZEPHYR_BASE later IN THIS SAME SHELL (e.g.
+# `west build` below, which is a west subcommand invoked in-process), but
+# extra/get_variant_name.sh runs as a SEPARATE script/subshell, and its
+# extra/get_variant_name.cmake reads $ENV{ZEPHYR_BASE} -- a real OS
+# environment variable, not a parent shell's local variable table. A bare
+# assignment never crosses that boundary, so find_package(Zephyr ... HINTS
+# $ENV{ZEPHYR_BASE} ...) silently found nothing, `west topdir`/boards
+# component resolution failed, and get_variant_name.sh's grep for a
+# VARIANT= line in cmake's (suppressed, 2>/dev/null) output came back
+# empty -- surfacing here as the terse, uninformative "Failed to get
+# variant name from '$target'" with the real cmake error swallowed.
+# Confirmed via a live CI run failing at exactly this step, immediately
+# after both the group1-pinctrl and DMA-properties devicetree fixes
+# already landed -- this is a separate, pre-existing bug in this fork's
+# own build.sh, not something either of those changes introduced or
+# masked. Every run of this workflow visible in this repo's Actions
+# history failed before this fix, so this had never been exercised
+# successfully to begin with.
+export ZEPHYR_BASE=$(west topdir)/zephyr
 
 if [ x$ZEPHYR_SDK_INSTALL_DIR == x"" ]; then
 	SDK_PATH=$(west sdk list | grep path | tail -n 1 | cut -d ':' -f 2 | tr -d ' ')
