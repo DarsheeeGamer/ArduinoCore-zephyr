@@ -4,6 +4,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <zephyr/dt-bindings/pwm/stm32_pwm.h>
+#include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
+
+/* Pinmux configuration for STM32U585 SAI2 Block A */
+&pinctrl {
+	sai2a_default: sai2a_default {
+		group1 {
+			pinmux = <STM32_PINMUX('B', 13, AF13)>,  /* D13 -> SAI2_SCK_A (BCLK) */
+			         <STM32_PINMUX('B', 15, AF13)>,  /* D11 -> SAI2_SD_A  (DIN)  */
+			         <STM32_PINMUX('C',  0, AF13)>;  /* A5  -> SAI2_FS_A  (LRC)  */
+			bias-disable;
+		};
+	};
+};
 
 /* Define SAI2 and SAI2 Block A under /soc */
 / {
@@ -24,18 +37,6 @@
 				pinctrl-0 = <&sai2a_default>;
 				pinctrl-names = "default";
 			};
-		};
-	};
-};
-
-/* Pinmux configuration for STM32U585 SAI2 Block A */
-&pinctrl {
-	sai2a_default: sai2a_default {
-		group1 {
-			pinmux = <STM32_PINMUX('B', 13, AF13)>,  /* D13 -> SAI2_SCK_A (BCLK) */
-			         <STM32_PINMUX('B', 15, AF13)>,  /* D11 -> SAI2_SD_A  (DIN)  */
-			         <STM32_PINMUX('C',  0, AF13)>;  /* A5  -> SAI2_FS_A  (LRC)  */
-			bias-disable;
 		};
 	};
 };
