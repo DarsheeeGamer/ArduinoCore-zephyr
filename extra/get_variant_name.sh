@@ -27,7 +27,21 @@ source venv/bin/activate
 # changed between calls. Split the combined output back into the VARIANT=
 # line (what callers actually want) and everything else (the diagnostic,
 # only printed if the variant lookup came back empty).
-combined=$(cmake "-DBOARD=$1" -P extra/get_variant_name.cmake 2>&1)
+#
+# BUG FIX (2026-08-22): the assignment below is a command substitution
+# under `set -e` (line 6) -- bash checks the exit status of a command
+# substitution when it's the right-hand side of a plain assignment, and
+# a non-zero exit from `cmake` (exactly what's been happening every run)
+# kills THIS SCRIPT right there, before the `if [ -z "$variant" ]` check
+# on the next lines ever runs. The entire point of this fix -- surfacing
+# cmake's real error instead of the old silent /dev/null redirect -- was
+# itself being silently skipped by set -e, for the same underlying reason
+# (a failing command with nothing printed by the time the script dies).
+# Confirmed directly: a minimal repro (`set -e; x=$(false_cmd 2>&1);
+# echo reached`) never reaches the echo. `|| true` on the assignment lets
+# execution continue past the failure while $combined still captures
+# whatever cmake wrote to its now-merged stdout+stderr.
+combined=$(cmake "-DBOARD=$1" -P extra/get_variant_name.cmake 2>&1) || true
 variant=$(grep 'VARIANT=' <<< "$combined" | cut -d '=' -f 2)
 if [ -z "$variant" ]; then
 	echo "get_variant_name.sh: cmake produced no VARIANT= output; its full output was:" >&2
