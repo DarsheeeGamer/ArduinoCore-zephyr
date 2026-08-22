@@ -24,15 +24,33 @@
  * The pin ASSIGNMENTS below were never wrong -- confirmed against that
  * same vendor file (sai2_sck_a_pb13, sai2_sd_a_pb15, sai2_fs_a_pc0, all
  * AF13) -- only this node's nesting depth was.
+ *
+ * BUG FIX (2026-08-22, take 2): removing 'group1' wasn't sufficient on its
+ * own. Confirmed via a real CI compile failure (devicetree.dtlib.DTError):
+ * `pinmux` in this binding's child-binding is `type: int` -- a SINGLE
+ * integer, not a comma-separated list. Confirmed directly from
+ * dts/bindings/pinctrl/st,stm32-pinctrl.yaml (upstream
+ * zephyrproject-rtos/zephyr): `pinmux: required: true, type: int`. One
+ * node with three comma-separated STM32_PINMUX() values -- even after
+ * fixing the group1 nesting -- was still structurally wrong: it needs to
+ * be THREE separate nodes, each with exactly one pinmux value, referenced
+ * together as a list under pinctrl-0. Confirmed this is the real,
+ * standard pattern by checking a live, real board file
+ * (boards/st/b_u585i_iot02a/b_u585i_iot02a-common.dtsi, upstream
+ * zephyrproject-rtos/zephyr): `pinctrl-0 = <&usart1_tx_pa9
+ * &usart1_rx_pa10>;`, where usart1_tx_pa9 and usart1_rx_pa10 are each
+ * their own single-pinmux node defined in hal_stm32's vendor pinctrl file.
+ *
+ * Rather than redefine three new nodes with the same content
+ * hal_stm32's stm32u585aiix-pinctrl.dtsi already provides (and risk a
+ * third round of the same class of mistake), this now references that
+ * vendor file's own pre-existing labels directly -- sai2_sck_a_pb13,
+ * sai2_sd_a_pb15, sai2_fs_a_pc0, confirmed present there with exactly
+ * these pinmux values (all AF13), each tagged /omit-if-no-ref/ so
+ * referencing them here costs nothing unless used. No local &pinctrl
+ * block needed in this file at all anymore -- the sai2_a sub-block below
+ * references these vendor labels directly via pinctrl-0.
  */
-&pinctrl {
-	sai2a_default: sai2a_default {
-		pinmux = <STM32_PINMUX('B', 13, AF13)>,  /* D13 -> SAI2_SCK_A (BCLK) */
-		         <STM32_PINMUX('B', 15, AF13)>,  /* D11 -> SAI2_SD_A  (DIN)  */
-		         <STM32_PINMUX('C',  0, AF13)>;  /* A5  -> SAI2_FS_A  (LRC)  */
-		bias-disable;
-	};
-};
 
 /* Define SAI2 and SAI2 Block A under /soc */
 / {
@@ -50,7 +68,19 @@
 				reg = <0x42025404 0x20>;
 				clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00200000>;
 				status = "okay";
-				pinctrl-0 = <&sai2a_default>;
+				/*
+				 * BUG FIX (2026-08-22, take 2, continued): this used to
+				 * reference &sai2a_default, a single local node this file
+				 * defined with three comma-separated pinmux values -- that
+				 * node no longer exists (see the take-2 comment above,
+				 * which removed the invalid local &pinctrl block entirely).
+				 * pinctrl-0 now lists the three separate, single-pinmux
+				 * vendor nodes directly, exactly matching the confirmed-
+				 * correct pattern from a real board
+				 * (b_u585i_iot02a-common.dtsi's
+				 * `pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;`).
+				 */
+				pinctrl-0 = <&sai2_sck_a_pb13 &sai2_sd_a_pb15 &sai2_fs_a_pc0>;
 				pinctrl-names = "default";
 				/*
 				 * BUG FIX (2026-08-21): dmas/dma-names are both
