@@ -122,6 +122,14 @@ jobs:
           echo "--- west topdir (run from checkout) ---"
           source venv/bin/activate
           west topdir 2>&1 || echo "west topdir FAILED with exit $?"
+          echo "--- does ZephyrConfig.cmake exist where find_package HINTS expects it? ---"
+          ZBASE="$(west topdir)/zephyr"
+          echo "ZEPHYR_BASE would be: $ZBASE"
+          ls -la "$ZBASE/share/zephyr-package/cmake/" 2>&1 || echo "share/zephyr-package/cmake/ directory itself is MISSING under $ZBASE"
+          echo "--- top-level contents of \$ZBASE/share (if it exists at all) ---"
+          ls -la "$ZBASE/share/" 2>&1 || echo "$ZBASE/share does not exist"
+          echo "--- is \$ZBASE even a real zephyr checkout? check for known top-level markers ---"
+          ls -la "$ZBASE" 2>&1 | head -20
           echo "--- raw cmake invocation as get_variant_name.sh would run it ---"
           cmake "-DBOARD=arduino_uno_q" -P extra/get_variant_name.cmake 2>&1 || echo "cmake FAILED with exit $?"
 
