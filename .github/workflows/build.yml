@@ -111,11 +111,25 @@ jobs:
           # instead of once).
           key: zephyr-unoq-workspace-cache-v3
 
+      - name: Debug Workspace State
+        shell: bash
+        run: |
+          echo "--- pwd ---"; pwd
+          echo "--- ls -la \$GITHUB_WORKSPACE parent ---"; ls -la "$(dirname "$GITHUB_WORKSPACE")"
+          echo "--- ls -la \$GITHUB_WORKSPACE ---"; ls -la "$GITHUB_WORKSPACE"
+          echo "--- find any .west/zephyr/modules dirs under /home/runner/work ---"
+          find /home/runner/work -maxdepth 3 \( -name ".west" -o -name "zephyr" -o -name "modules" \) 2>&1
+          echo "--- west topdir (run from checkout) ---"
+          source venv/bin/activate
+          west topdir 2>&1 || echo "west topdir FAILED with exit $?"
+          echo "--- raw cmake invocation as get_variant_name.sh would run it ---"
+          cmake "-DBOARD=arduino_uno_q" -P extra/get_variant_name.cmake 2>&1 || echo "cmake FAILED with exit $?"
+
       - name: Compile UNO Q Loader
         shell: bash
         run: |
           source venv/bin/activate
-          
+
           if [ -d "$HOME/zephyr-sdk-1.0.1" ]; then
             export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-1.0.1"
           elif [ -d "$HOME/.local/share/zephyr-sdk-0.16.8" ]; then
@@ -130,9 +144,28 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unoq-i2s-firmware
+          # BUG FIX (2026-08-22): path was singular `firmware/`, but
+          # extra/build.sh (see its `for ext in elf bin hex uf2` loop and
+          # the `cp .../zephyr.dts firmwares/...` / `.../zephyr.config
+          # firmwares/...` lines right after) writes every compiled output
+          # to plural `firmwares/`, not `firmware/`. With
+          # if-no-files-found: warn, this mismatch would never fail the
+          # job -- it would silently upload an artifact containing zero of
+          # the actual compiled files, only the two syms .ld paths (which
+          # ARE correct, since build.sh writes those into
+          # variants/<variant>/ as named here). Caught by actually reading
+          # build.sh's output paths line-by-line rather than assuming this
+          # step, unchanged since before this session, was already
+          # correct. Also added the .dts and .config outputs build.sh
+          # produces, since the person asked to confirm exactly what
+          # landed in the artifact and those are called out in
+          # build.sh's own header comment as expected outputs of this
+          # workflow, but weren't being uploaded at all before this fix.
           path: |
-            firmware/zephyr-arduino_uno_q_stm32u585xx.elf
-            firmware/zephyr-arduino_uno_q_stm32u585xx.bin
+            firmwares/zephyr-arduino_uno_q_stm32u585xx.elf
+            firmwares/zephyr-arduino_uno_q_stm32u585xx.bin
+            firmwares/zephyr-arduino_uno_q_stm32u585xx.dts
+            firmwares/zephyr-arduino_uno_q_stm32u585xx.config
             variants/arduino_uno_q_stm32u585xx/syms-dynamic.ld
             variants/arduino_uno_q_stm32u585xx/syms-static.ld
           if-no-files-found: warn
