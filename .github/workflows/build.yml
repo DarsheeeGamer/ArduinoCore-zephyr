@@ -90,6 +90,49 @@ jobs:
             yes y | ./extra/bootstrap.sh || true
           fi
 
+          # BUG FIX (2026-08-22): even when the .west check above correctly
+          # skips bootstrap.sh's SLOW, cacheable work (west init, west
+          # update, sdk install, blobs fetch -- all safe to skip when
+          # zephyr/, modules/, and the SDK dirs already restored from cache),
+          # it also skips bootstrap.sh's own unconditional
+          # `pip3 install -r ../zephyr/scripts/requirements-base.txt` line,
+          # since that line lives inside the same script and the whole
+          # script invocation is gated by one `if`. This matters because
+          # venv/ is NOT a cached path (see Restore/Save Workspace Cache
+          # above -- only zephyr-sdk-*, zephyr, modules, .west are cached)
+          # and gets recreated from scratch every single run by "Create
+          # Repo Venv & Dependencies" above (`python3 -m venv venv`,
+          # `pip install west requests` -- nothing from requirements-base.txt
+          # at all). So on every cache-hit run, this fresh venv never gets
+          # Zephyr's own Python dependencies installed into it.
+          #
+          # Confirmed live: CMake Error at .../boards.cmake:191 (Error
+          # finding board: arduino_uno_q), with the real Python traceback
+          # underneath it -- `ModuleNotFoundError: No module named
+          # 'jsonschema'` from zephyr/scripts/list_boards.py, which
+          # boards.cmake shells out to via execute_process(). jsonschema is
+          # listed on line 15 of zephyr/scripts/requirements-base.txt --
+          # confirmed by reading the real file directly from
+          # zephyrproject-rtos/zephyr, not assumed.
+          #
+          # Fix: install requirements-base.txt's packages unconditionally,
+          # every run, regardless of whether the .west check above decided
+          # to skip bootstrap.sh's network-heavy work. zephyr/ is guaranteed
+          # to exist by this point either way (restored from cache, or
+          # freshly populated by bootstrap.sh's own west update just above).
+          # Uses `west topdir` (the same mechanism build.sh itself uses to
+          # compute ZEPHYR_BASE) rather than a hardcoded relative path, so
+          # this doesn't depend on assumptions about cwd matching
+          # bootstrap.sh's own `../zephyr/...` usage. pip install is
+          # idempotent, so this is a harmless no-op on the rare run where
+          # bootstrap.sh's own copy of this same install already ran.
+          ZBASE="$(west topdir)/zephyr"
+          if [ -f "$ZBASE/scripts/requirements-base.txt" ]; then
+            pip install -r "$ZBASE/scripts/requirements-base.txt"
+          else
+            echo "WARNING: $ZBASE/scripts/requirements-base.txt not found -- cannot install Zephyr's Python dependencies. Compile will likely fail." >&2
+          fi
+
       - name: Save Workspace Cache
         uses: actions/cache/save@v4
         if: always() && steps.restore-cache.outputs.cache-hit != 'true'
